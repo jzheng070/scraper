@@ -1,0 +1,9 @@
+# Output files
+lululemon_skus.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
