@@ -1,5 +1,7 @@
 # Output files
 lululemon_skus.json
+google_trends_quarterly.json
+*_trends.json
 
 # Python
 __pycache__/
