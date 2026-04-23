@@ -2,6 +2,8 @@
 lululemon_skus.json
 google_trends_quarterly.json
 *_trends.json
+*_quarterly.csv
+*_monthly_yoy.csv
 
 # Python
 __pycache__/

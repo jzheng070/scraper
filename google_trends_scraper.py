@@ -6,7 +6,7 @@ This scraper fetches Google Trends data for specified keywords
 and aggregates the interest values by quarter.
 """
 
-import json
+import csv
 import time
 import argparse
 from datetime import datetime
@@ -284,6 +284,34 @@ class GoogleTrendsScraper:
 
         return summary
 
+    def save_csv(self, path: str):
+        """
+        Write results to two CSV files: one for quarterly data, one for monthly YoY.
+
+        Files created:
+          <path>_quarterly.csv  — keyword, quarter, average, sum, data_points
+          <path>_monthly_yoy.csv — keyword, month, value, yoy_growth_pct
+        """
+        base = path.removesuffix(".csv")
+
+        quarterly_path = f"{base}_quarterly.csv"
+        with open(quarterly_path, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(["keyword", "quarter", "average", "sum", "data_points"])
+            for keyword, quarters in self.quarterly_data.items():
+                for quarter, vals in quarters.items():
+                    writer.writerow([keyword, quarter, vals["average"], vals["sum"], vals["data_points"]])
+        print(f"Quarterly data saved to {quarterly_path}")
+
+        yoy_path = f"{base}_monthly_yoy.csv"
+        with open(yoy_path, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(["keyword", "month", "value", "yoy_growth_pct"])
+            for keyword, months in self.monthly_yoy_data.items():
+                for month, vals in months.items():
+                    writer.writerow([keyword, month, vals["value"], vals["yoy_growth_pct"]])
+        print(f"Monthly YoY data saved to {yoy_path}")
+
     def print_results(self):
         """Print formatted results to console."""
         print("\n" + "=" * 60)
@@ -355,8 +383,9 @@ Examples:
     )
     parser.add_argument(
         "-o", "--output",
-        default="google_trends_quarterly.json",
-        help="Output JSON file path (default: google_trends_quarterly.json)"
+        default="google_trends",
+        help="Output file base name (default: google_trends). "
+             "Produces <name>_quarterly.csv and <name>_monthly_yoy.csv"
     )
 
     args = parser.parse_args()
@@ -373,13 +402,7 @@ Examples:
 
         if quarterly_data:
             scraper.print_results()
-
-            # Save results to file
-            summary = scraper.get_summary()
-            with open(args.output, "w") as f:
-                json.dump(summary, f, indent=2)
-
-            print(f"\nResults saved to {args.output}")
+            scraper.save_csv(args.output)
             return 0
         else:
             print("\nNo data collected.")
@@ -388,10 +411,7 @@ Examples:
     except KeyboardInterrupt:
         print("\n\nScraping interrupted by user.")
         if scraper.quarterly_data:
-            summary = scraper.get_summary()
-            with open(args.output, "w") as f:
-                json.dump(summary, f, indent=2)
-            print(f"Partial results saved to {args.output}")
+            scraper.save_csv(args.output)
         return 1
 
 
