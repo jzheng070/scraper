@@ -30,6 +30,7 @@ class GoogleTrendsScraper:
         self.pytrends = TrendReq(hl=hl, tz=tz)
         self.raw_data: Dict[str, Dict] = {}
         self.quarterly_data: Dict[str, Dict] = {}
+        self.monthly_yoy_data: Dict[str, Dict] = {}
 
     def fetch_interest_over_time(
         self,
@@ -87,6 +88,58 @@ class GoogleTrendsScraper:
         except Exception as e:
             print(f"Error fetching trend data: {e}")
             return None
+
+    def aggregate_yoy_monthly(self, data: Dict[str, Dict]) -> Dict[str, Dict]:
+        """
+        Calculate Year-over-Year (YoY) growth rates for each month.
+
+        Args:
+            data: Dictionary with keyword -> {date: value} mapping.
+
+        Returns:
+            Dictionary with keyword -> {YYYY-MM: {value, yoy_growth_pct}} mapping.
+            yoy_growth_pct is None when prior-year data is unavailable.
+        """
+        monthly_yoy = {}
+
+        for keyword, date_values in data.items():
+            # Bucket raw data points by month
+            month_buckets: Dict[str, List[int]] = {}
+            for date_str, value in date_values.items():
+                try:
+                    date = datetime.fromisoformat(date_str.split()[0])
+                except ValueError:
+                    continue
+                month_key = f"{date.year}-{date.month:02d}"
+                month_buckets.setdefault(month_key, []).append(value)
+
+            # Average within each month
+            month_averages = {
+                month: round(sum(vals) / len(vals), 2)
+                for month, vals in month_buckets.items()
+            }
+
+            # Compute YoY growth rate vs same month prior year
+            yoy_data = {}
+            for month_key in sorted(month_averages):
+                year_str, month_str = month_key.split("-")
+                prior_key = f"{int(year_str) - 1}-{month_str}"
+                current_val = month_averages[month_key]
+                prior_val = month_averages.get(prior_key)
+
+                if prior_val is not None and prior_val > 0:
+                    yoy_pct = round((current_val - prior_val) / prior_val * 100, 2)
+                else:
+                    yoy_pct = None
+
+                yoy_data[month_key] = {
+                    "value": current_val,
+                    "yoy_growth_pct": yoy_pct,
+                }
+
+            monthly_yoy[keyword] = yoy_data
+
+        return monthly_yoy
 
     def aggregate_by_quarter(self, data: Dict[str, Dict]) -> Dict[str, Dict]:
         """
@@ -193,10 +246,11 @@ class GoogleTrendsScraper:
                 print(f"Waiting {self.delay}s before next batch...")
                 time.sleep(self.delay)
 
-        # Aggregate by quarter
+        # Aggregate
         print("\n" + "-" * 60)
-        print("Aggregating data by quarter...")
+        print("Aggregating data by quarter and computing YoY monthly growth...")
         self.quarterly_data = self.aggregate_by_quarter(all_data)
+        self.monthly_yoy_data = self.aggregate_yoy_monthly(all_data)
 
         return self.quarterly_data
 
@@ -212,6 +266,7 @@ class GoogleTrendsScraper:
             "keywords_count": len(self.quarterly_data),
             "keywords": list(self.quarterly_data.keys()),
             "quarterly_data": self.quarterly_data,
+            "monthly_yoy_data": self.monthly_yoy_data,
         }
 
         # Add quarter range info
@@ -241,6 +296,18 @@ class GoogleTrendsScraper:
             for quarter, values in quarters.items():
                 print(f"  {quarter}: avg={values['average']:.1f}, "
                       f"sum={values['sum']}, points={values['data_points']}")
+
+        print("\n" + "=" * 60)
+        print("MONTHLY YoY GROWTH RATES")
+        print("=" * 60)
+
+        for keyword, months in self.monthly_yoy_data.items():
+            print(f"\n{keyword}:")
+            print("-" * 40)
+            for month, values in months.items():
+                yoy = values["yoy_growth_pct"]
+                yoy_str = f"{yoy:+.1f}%" if yoy is not None else "N/A (no prior year)"
+                print(f"  {month}: value={values['value']:.1f}, YoY={yoy_str}")
 
 
 def main():
