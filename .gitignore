@@ -1,5 +1,7 @@
 # Output files
 lululemon_skus.json
+*_weekly_visitors.json
+*_weekly_visitors.csv
 
 # Python
 __pycache__/
